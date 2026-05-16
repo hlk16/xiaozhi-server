@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual Environment
+venv/
+venv*/
+.venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+
+# Environment / Config (may contain secrets)
+.env
+.env.local
+.env.*.local
+
+# Claude local settings
+.claude/
+
+# Data / Cache
+data/
+cache/
+
+# Models (large files, download separately)
+models/
+
+# Music (local test assets)
+music/
+
+# Audio assets (generated/downloaded)
+config/assets/*.wav
+config/assets/*.mp3
+config/assets/bind_code/
+config/assets/wakeup_words/
+
+# Docker
+docker-compose.override.yml
+
+# API config (generated)
+config_from_api.yaml
+
+# MCP settings (local)
+mcp_server_settings.json
