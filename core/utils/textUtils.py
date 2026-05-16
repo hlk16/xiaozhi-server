@@ -1,8 +1,84 @@
+import re
 import json
+import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from core.connection import ConnectionHandler
+
+logger = logging.getLogger(__name__)
+
+ACTION_CODES = frozenset(
+    {
+        "NOACTION",
+        "WAVE",
+        "CLAP",
+        "THINK",
+        "WELCOME",
+        "POINT_LEFT",
+        "POINT_RIGHT",
+        "SALUTE",
+    }
+)
+
+VOICE_REPLY_PATTERN = re.compile(r"\[语音回复:(.*?)\]")
+ACTION_PATTERN = re.compile(r"\[动作指令:(.*?)\]")
+
+
+def parse_robot_response(text: str) -> tuple:
+    """
+    解析机器人回复格式，提取语音文本和动作指令
+
+    Args:
+        text: LLM原始输出文本
+
+    Returns:
+        tuple: (voice_text, action_code)
+            - voice_text: 提取的语音文本，若无格式则返回原文本
+            - action_code: 动作代码，默认"NULL"
+
+    Examples:
+        >>> parse_robot_response("[语音回复:你好呀][动作指令:WAVE]")
+        ("你好呀", "WAVE")
+        >>> parse_robot_response("普通文本回复")
+        ("普通文本回复", "NULL")
+    """
+    voice_match = VOICE_REPLY_PATTERN.search(text)
+    action_match = ACTION_PATTERN.search(text)
+
+    logger.info(f"[RobotParser] 原始文本: {repr(text)}")
+    logger.info(f"[RobotParser] voice_match: {voice_match.group(0) if voice_match else None}")
+    logger.info(f"[RobotParser] action_match: {action_match.group(0) if action_match else None}")
+
+    # 如果找到语音回复标记，提取内容
+    if voice_match:
+        voice_text = voice_match.group(1).strip()
+    else:
+        # 容错：如果没有语音回复标记，但找到动作指令标记
+        # 尝试提取动作指令后的内容作为语音文本
+        if action_match:
+            action_end = action_match.end()
+            remaining = text[action_end:].strip()
+            # 如果动作指令后面还有内容，作为语音
+            if remaining:
+                voice_text = remaining
+            else:
+                # 动作指令前面可能有语音内容
+                action_start = action_match.start()
+                voice_text = text[:action_start].strip()
+                # 清理可能残留的 [ 或 ]
+                voice_text = voice_text.strip("[] ")
+        else:
+            voice_text = text
+
+    action_code = action_match.group(1).strip() if action_match else "NOACTION"
+
+    if action_code not in ACTION_CODES:
+        action_code = "NOACTION"
+
+    logger.info(f"[RobotParser] 解析结果: voice_text={repr(voice_text)}, action_code={action_code}")
+
+    return voice_text, action_code
 
 TAG = __name__
 EMOJI_MAP = {

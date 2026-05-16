@@ -338,3 +338,16 @@ async def send_display_message(conn: "ConnectionHandler", text):
         "session_id": conn.session_id
     }
     await conn.websocket.send(json.dumps(message))
+
+
+async def send_action_message(conn: "ConnectionHandler", action_code: str):
+    """向机器人设备发送动作指令"""
+    await conn.websocket.send(
+        json.dumps(
+            {
+                "type": "action",
+                "action": action_code,
+                "session_id": conn.session_id,
+            }
+        )
+    )

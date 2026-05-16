@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import copy
 import json
@@ -1020,14 +1021,6 @@ class ConnectionHandler:
                 if content is not None and len(content) > 0:
                     if not tool_call_flag:
                         response_message.append(content)
-                        self.tts.tts_text_queue.put(
-                            TTSMessageDTO(
-                                sentence_id=current_sentence_id,
-                                sentence_type=SentenceType.MIDDLE,
-                                content_type=ContentType.TEXT,
-                                content_detail=content,
-                            )
-                        )
         except Exception as e:
             self.logger.bind(tag=TAG).error(f"LLM stream processing error: {e}")
             self.tts.tts_text_queue.put(
@@ -1140,8 +1133,30 @@ class ConnectionHandler:
         # 存储对话内容
         if len(response_message) > 0:
             text_buff = "".join(response_message)
-            self.tts.store_tts_text(current_sentence_id, text_buff)
-            self.dialogue.put(Message(role="assistant", content=text_buff))
+            voice_text, action_code = textUtils.parse_robot_response(text_buff)
+
+            # 下发机器人动作指令到设备
+            from core.handle.sendAudioHandle import send_action_message
+
+            asyncio.run_coroutine_threadsafe(
+                send_action_message(self, action_code), self.loop
+            )
+
+            # 将语音文本分段送入TTS队列
+            segments = re.split(r"([。！？!?；;\n])", voice_text)
+            for seg in segments:
+                if seg:
+                    self.tts.tts_text_queue.put(
+                        TTSMessageDTO(
+                            sentence_id=current_sentence_id,
+                            sentence_type=SentenceType.MIDDLE,
+                            content_type=ContentType.TEXT,
+                            content_detail=seg,
+                        )
+                    )
+
+            self.tts.store_tts_text(current_sentence_id, voice_text)
+            self.dialogue.put(Message(role="assistant", content=voice_text))
 
         if depth == 0:
             self.tts.tts_text_queue.put(
