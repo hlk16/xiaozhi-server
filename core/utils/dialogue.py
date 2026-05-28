@@ -91,8 +91,22 @@ class Dialogue:
 
         return result
 
+    def _apply_sliding_window(
+            self, messages: List[Message], max_rounds: int
+    ) -> List[Message]:
+        if max_rounds <= 0 or not messages:
+            return messages
+        user_indices = [i for i, m in enumerate(messages) if m.role == "user"]
+        if len(user_indices) <= max_rounds:
+            return messages
+        cutoff_idx = user_indices[-max_rounds]
+        return messages[cutoff_idx:]
+
     def get_llm_dialogue_with_memory(
-            self, memory_str: str = None, voiceprint_config: dict = None
+            self,
+            memory_str: str = None,
+            voiceprint_config: dict = None,
+            max_history_rounds: int = 0,
     ) -> List[Dict[str, str]]:
         # 构建对话
         dialogue = []
@@ -164,8 +178,12 @@ class Dialogue:
 
             dialogue.append({"role": "system", "content": dynamic_part})
 
-        # 第四段：实际对话历史（不含 few-shot）
+        # 第四段：实际对话历史（不含 few-shot），应用滑动窗口
         actual_messages = [m for m in non_system_messages if not m.is_temporary]
+        if max_history_rounds > 0:
+            actual_messages = self._apply_sliding_window(
+                actual_messages, max_history_rounds
+            )
         complete_actual = self._ensure_tool_calls_complete(actual_messages)
         for m in complete_actual:
             self.getMessages(m, dialogue)

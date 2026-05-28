@@ -266,7 +266,7 @@ async def send_mcp_initialize_message(conn: "ConnectionHandler"):
             },
         },
     }
-    logger.bind(tag=TAG).debug("发送MCP初始化消息")
+    logger.bind(tag=TAG).info("发送MCP初始化消息")
     await send_mcp_message(conn, payload)
 
 
@@ -277,7 +277,7 @@ async def send_mcp_tools_list_request(conn: "ConnectionHandler"):
         "id": 2,  # mcpToolsListID
         "method": "tools/list",
     }
-    logger.bind(tag=TAG).debug("发送MCP工具列表请求")
+    logger.bind(tag=TAG).info("发送MCP工具列表请求")
     await send_mcp_message(conn, payload)
 
 
