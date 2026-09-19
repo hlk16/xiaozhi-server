@@ -63,11 +63,11 @@ def setup_logging():
 
         log_format = log_config.get(
             "log_format",
-            "<green>{time:YYMMDD HH:mm:ss}</green>[{version}_{extra[selected_module]}][<light-blue>{extra[tag]}</light-blue>]-<level>{level}</level>-<light-green>{message}</light-green>",
+            "<green>{time:YYMMDD HH:mm:ss.SSS}</green>[{version}_{extra[selected_module]}][<light-blue>{extra[tag]}</light-blue>]-<level>{level}</level>-<light-green>{message}</light-green>",
         )
         log_format_file = log_config.get(
             "log_format_file",
-            "{time:YYYY-MM-DD HH:mm:ss} - {version}_{extra[selected_module]} - {name} - {level} - {extra[tag]} - {message}",
+            "{time:YYYY-MM-DD HH:mm:ss.SSS} - {version}_{extra[selected_module]} - {name} - {level} - {extra[tag]} - {message}",
         )
         log_format = log_format.replace("{version}", SERVER_VERSION)
         log_format_file = log_format_file.replace("{version}", SERVER_VERSION)

@@ -9,6 +9,7 @@ from core.utils import textUtils
 from core.utils.util import audio_to_data
 from core.providers.tts.dto.dto import SentenceType
 from core.utils.audioRateController import AudioRateController
+from core.utils import latency
 
 TAG = __name__
 # 音频帧时长（毫秒）
@@ -42,6 +43,10 @@ async def sendAudioMessage(conn: "ConnectionHandler", sentenceType, audios, text
             await send_tts_message(conn, "sentence_start", text)
 
     await sendAudio(conn, audios)
+
+    # ---- 延迟打点：首段音频已下发，输出本轮汇总 ----
+    latency.report(conn, conn.logger)
+
     # 发送句子开始消息
     if sentenceType is not SentenceType.MIDDLE:
         conn.logger.bind(tag=TAG).info(f"发送音频消息: {sentenceType}, {text}")
@@ -248,6 +253,10 @@ async def _do_send_audio(conn: "ConnectionHandler", opus_packet, flow_control):
     """
     packet_index = flow_control.get("packet_count", 0)
     sequence = flow_control.get("sequence", 0)
+
+    # ---- 延迟打点：本轮第一个音频包下发（用户即将听到声音）----
+    if packet_index == 0:
+        latency.mark(conn, "audio_sent")
 
     if conn.conn_from_mqtt_gateway:
         # 计算时间戳（基于播放位置）

@@ -10,6 +10,7 @@ import concurrent.futures
 from core.utils import p3
 from datetime import datetime
 from core.utils import textUtils
+from core.utils import latency
 from typing import Callable, Any
 from abc import ABC, abstractmethod
 from config.logger import setup_logging
@@ -117,6 +118,8 @@ class TTSProviderBase(ABC):
                 try:
                     audio_bytes = asyncio.run(self.text_to_speak(text, None))
                     if audio_bytes:
+                        # ---- 延迟打点：TTS 合成完成（注意必须在下面推音频之前打）----
+                        latency.mark(self.conn, "tts_ok")
                         # 使用原始文本用于显示/上报
                         self.tts_audio_queue.put((SentenceType.FIRST, None, original_text, getattr(self, 'current_sentence_id', None)))
                         audio_bytes_to_data_stream(
@@ -160,6 +163,8 @@ class TTSProviderBase(ABC):
                         max_repeat_time -= 1
 
                 if max_repeat_time > 0:
+                    # ---- 延迟打点：TTS 合成完成（必须在转码之前打）----
+                    latency.mark(self.conn, "tts_ok")
                     logger.bind(tag=TAG).info(
                         f"语音生成成功: {original_text}:{tmp_file}，重试{5 - max_repeat_time}次"
                     )
@@ -186,6 +191,8 @@ class TTSProviderBase(ABC):
                 try:
                     audio_bytes = asyncio.run(self.text_to_speak(text, None))
                     if audio_bytes:
+                        # ---- 延迟打点：TTS 合成完成（必须在转码之前打）----
+                        latency.mark(self.conn, "tts_ok")
                         audio_datas = []
                         audio_bytes_to_data_stream(
                             audio_bytes,
@@ -227,6 +234,8 @@ class TTSProviderBase(ABC):
                         max_repeat_time -= 1
 
                 if max_repeat_time > 0:
+                    # ---- 延迟打点：TTS 合成完成（必须在转码之前打）----
+                    latency.mark(self.conn, "tts_ok")
                     logger.bind(tag=TAG).info(
                         f"语音生成成功: {original_text}:{tmp_file}，重试{5 - max_repeat_time}次"
                     )

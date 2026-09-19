@@ -43,6 +43,7 @@ from core.utils.prompt_manager import PromptManager
 from core.utils.voiceprint_provider import VoiceprintProvider
 from core.utils.util import get_system_error_response
 from core.utils import textUtils
+from core.utils import latency
 
 
 TAG = __name__
@@ -987,6 +988,11 @@ class ConnectionHandler:
             self.logger.bind(tag=TAG).error(f"LLM 处理出错 {query}: {e}")
             return None
 
+        # ---- 延迟打点：LLM 请求真正发出的时刻 ----
+        # 注意 response()/response_with_functions() 返回的是生成器，
+        # 真正的 HTTP 请求要到下面第一次迭代才发出，所以打点放在循环之前。
+        latency.mark(self, "llm_req")
+
         # 处理流式响应
         tool_call_flag = False
         # 支持多个并行工具调用 - 使用列表存储
@@ -1024,6 +1030,8 @@ class ConnectionHandler:
                     emotion_flag = False
 
                 if content is not None and len(content) > 0:
+                    # ---- 延迟打点：LLM 首个 token（只记首次）----
+                    latency.mark(self, "llm_token")
                     if not tool_call_flag:
                         response_message.append(content)
         except Exception as e:
@@ -1045,6 +1053,10 @@ class ConnectionHandler:
                     )
                 )
             return
+
+        # ---- 延迟打点：LLM 流式输出结束 ----
+        latency.mark(self, "llm_done")
+
         # 处理function call
         if tool_call_flag:
             bHasError = False
@@ -1146,6 +1158,9 @@ class ConnectionHandler:
             asyncio.run_coroutine_threadsafe(
                 send_action_message(self, action_code), self.loop
             )
+
+            # ---- 延迟打点：首个文本进入 TTS 队列 ----
+            latency.mark(self, "tts_enqueue")
 
             # 将语音文本分段送入TTS队列
             segments = re.split(r"([。！？!?；;\n])", voice_text)

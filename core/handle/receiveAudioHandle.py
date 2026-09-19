@@ -10,6 +10,7 @@ from core.handle.abortHandle import handleAbortMessage
 from core.handle.intentHandler import handle_user_intent
 from core.utils.output_counter import check_device_output_limit
 from core.handle.sendAudioHandle import send_stt_message, SentenceType
+from core.utils import latency
 
 TAG = __name__
 
@@ -37,6 +38,16 @@ async def resume_vad_detection(conn: "ConnectionHandler"):
 
 
 async def startToChat(conn: "ConnectionHandler", text):
+    # ---- 延迟打点：一轮的起点（ASR 出文本）----
+    lt = latency.reset(conn)
+    lt.mark("asr_text")
+    # 用户停止说话 -> ASR 出文本。vad_last_voice_time 由本地 VAD 维护，单位毫秒。
+    # 流式 ASR 下这个间隔即"云端断句 + 识别"的耗时；manual 模式下该值不更新，故限制范围。
+    if conn.vad_last_voice_time > 0:
+        gap = time.time() * 1000 - conn.vad_last_voice_time
+        if 0 < gap < 30000:
+            lt.voice_end_gap = gap / 1000.0
+
     # 检查输入是否是JSON格式（包含说话人信息）
     speaker_name = None
     language_tag = None
