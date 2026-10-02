@@ -28,45 +28,44 @@ import openai
 from tabulate import tabulate
 from config.settings import load_config
 
-# 动作码从项目代码读取，保证与实现同步（DESIGN §4.1.1 的单一数据源）
+# 动作码与 schema 都从项目代码读取，保证与实现同步
+# （DESIGN_STRUCTURED_OUTPUT.md §4.1.4 的单一数据源）
 try:
-    from core.utils.textUtils import ACTION_CODES
-except Exception:  # 容错：textUtils 尚未改造时用当前白名单
+    from core.utils.textUtils import (
+        ROBOT_ACTION_CODES as ACTION_CODES,
+        MAX_ACTIONS,
+        MAX_DELAY_MS,
+        build_reply_schema,
+    )
+    REPLY_SCHEMA = build_reply_schema()
+except ImportError:  # 容错：textUtils 尚未改造时用内联定义
     ACTION_CODES = frozenset({
-        "NOACTION", "WAVE", "CLAP", "THINK",
+        "WAVE", "CLAP", "THINK",
         "WELCOME", "POINT_LEFT", "POINT_RIGHT", "SALUTE",
     })
-
-MAX_ACTIONS = 3
-MAX_DELAY_MS = 5000
-
-# 目标契约（DESIGN §4.1）
-REPLY_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "voice": {"type": "string", "description": "要朗读的纯口语文本"},
-        "actions": {
-            "type": "array",
-            "maxItems": MAX_ACTIONS,
-            "description": "按执行顺序排列的肢体动作，没有合适的动作时空数组",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "code": {"type": "string", "enum": sorted(ACTION_CODES)},
-                    "delay_ms": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": MAX_DELAY_MS,
+    MAX_ACTIONS = 3
+    MAX_DELAY_MS = 5000
+    REPLY_SCHEMA = {
+        "type": "object",
+        "properties": {
+            "voice": {"type": "string", "description": "要朗读的纯口语文本"},
+            "actions": {
+                "type": "array",
+                "maxItems": MAX_ACTIONS,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "code": {"type": "string", "enum": sorted(ACTION_CODES)},
+                        "delay_ms": {"type": "integer", "minimum": 0, "maximum": MAX_DELAY_MS},
                     },
+                    "required": ["code", "delay_ms"],
+                    "additionalProperties": False,
                 },
-                "required": ["code", "delay_ms"],
-                "additionalProperties": False,
             },
         },
-    },
-    "required": ["voice", "actions"],
-    "additionalProperties": False,
-}
+        "required": ["voice", "actions"],
+        "additionalProperties": False,
+    }
 
 # 测试用系统提示词。
 # 注意：部分 provider（含 DeepSeek）的 JSON 模式要求 prompt 里出现 "json" 字样。

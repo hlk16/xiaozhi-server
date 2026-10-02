@@ -8,6 +8,35 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# ====================================================================
+# 机器人动作码 —— 结构化输出方案（DESIGN_STRUCTURED_OUTPUT.md §4.1.4）
+#
+# ACTION_DESCRIPTIONS 是**唯一数据源**：schema、prompt 说明、校验白名单
+# 全部由它派生。新增一个动作只改这里，不需要改第二处。
+# ====================================================================
+
+ACTION_DESCRIPTIONS = {
+    "WAVE": "挥手打招呼",
+    "CLAP": "拍手鼓掌",
+    "THINK": "思考动作（手托下巴）",
+    "WELCOME": "欢迎手势（双臂张开）",
+    "POINT_LEFT": "指向左",
+    "POINT_RIGHT": "指向右",
+    "SALUTE": "敬礼",
+}
+
+# 合法动作码（不含 NOACTION —— 无动作统一用空数组表示）
+ROBOT_ACTION_CODES = frozenset(ACTION_DESCRIPTIONS)
+
+# 单次回复的动作数量上限（固定值，不做成配置）
+MAX_ACTIONS = 3
+
+# 单个动作延迟上限（毫秒），防止模型给出离谱数值
+MAX_DELAY_MS = 5000
+
+# ---- 遗留：旧的方括号方案白名单，含 NOACTION ----
+# 结构化输出版本稳定前保留，供 parse_robot_response 与 connection.py 使用。
+# 待旧路径下线后一并删除（DESIGN_STRUCTURED_OUTPUT.md 决策 D6）。
 ACTION_CODES = frozenset(
     {
         "NOACTION",
@@ -23,6 +52,60 @@ ACTION_CODES = frozenset(
 
 VOICE_REPLY_PATTERN = re.compile(r"\[语音回复:(.*?)\]")
 ACTION_PATTERN = re.compile(r"\[动作指令:(.*?)\]")
+
+
+def build_reply_schema() -> dict:
+    """构建 LLM 输出契约的 JSON Schema。
+
+    同时服务两种模式（DESIGN_STRUCTURED_OUTPUT.md §4.5）：
+      - json_schema 模式：整个 dict 作为 response_format 参数传给 API
+      - json_object  模式：由 render_action_spec() 渲染成人话写进 prompt
+
+    因为两个模式共用同一份定义，将来 provider 支持 strict 模式时
+    只需改配置，不需要动代码。
+    """
+    return {
+        "type": "object",
+        "properties": {
+            "voice": {
+                "type": "string",
+                "description": "要朗读的纯口语文本。不要包含任何标记或格式符号。",
+            },
+            "actions": {
+                "type": "array",
+                "maxItems": MAX_ACTIONS,
+                "description": "按执行顺序排列的肢体动作，没有合适的动作时空数组 []",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "code": {
+                            "type": "string",
+                            "enum": sorted(ROBOT_ACTION_CODES),
+                            "description": "肢体动作代码",
+                        },
+                        "delay_ms": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": MAX_DELAY_MS,
+                            "description": "相对上一条动作的延迟毫秒数；第一条通常填 0",
+                        },
+                    },
+                    "required": ["code", "delay_ms"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["voice", "actions"],
+        "additionalProperties": False,
+    }
+
+
+def render_action_spec() -> str:
+    """把动作清单渲染成给 LLM 看的人话，供 prompt 模板使用。
+
+    对应 agent-base-prompt.txt 里的 {{action_spec}} 占位符。
+    """
+    return "\n".join(f"- {code}: {desc}" for code, desc in ACTION_DESCRIPTIONS.items())
 
 
 def parse_robot_response(text: str) -> tuple:
