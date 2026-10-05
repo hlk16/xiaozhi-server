@@ -187,6 +187,11 @@ EMOJI_MAP = {
     "😘": "kissy",
     "😏": "confident",
 }
+
+# 模型没给出白名单内的 emoji 时的兜底值
+DEFAULT_EMOJI = "🙂"
+DEFAULT_EMOTION = "happy"
+
 EMOJI_RANGES = [
     (0x1F600, 0x1F64F),
     (0x1F300, 0x1F5FF),
@@ -241,27 +246,59 @@ def is_punctuation_or_emoji(char):
 
 
 async def get_emotion(conn: "ConnectionHandler", text):
-    """获取文本内的情绪消息"""
-    emoji = "🙂"
-    emotion = "happy"
+    """从 LLM 回复文本中提取情绪，下发给客户端。
+
+    注意这里取的是**模型自己**的情绪（它在回复开头插入的 emoji），
+    不是用户的情绪——用户情绪由 ASR 声学模型识别，走另一条链路
+    （见 core/providers/asr/base.py 的「识别情绪」日志）。
+
+    本函数以前成功时不打任何日志，导致整条链路不可观测、出问题无法排查。
+    现在无论成功失败都会记录：命中的 emoji、映射出的情绪、实际下发的报文。
+    """
+    emoji = DEFAULT_EMOJI
+    emotion = DEFAULT_EMOTION
+    matched = False
+
     for char in text:
         if char in EMOJI_MAP:
             emoji = char
             emotion = EMOJI_MAP[char]
+            matched = True
             break
+
+    payload = {
+        "type": "llm",
+        "text": emoji,
+        "emotion": emotion,
+        "session_id": conn.session_id,
+    }
+    # 实际下发的报文。json.dumps 默认 ensure_ascii=True，emoji 会被转义成
+    # 😆 这类代理对——两种写法等价，前端解析结果相同。
+    message = json.dumps(payload)
+    # 日志里用可读形式，否则 emoji 全是转义码没法看
+    message_readable = json.dumps(payload, ensure_ascii=False)
+
+    # 没命中白名单说明模型这次没按 prompt 插 emoji（或插了表外的），
+    # 前端拿到的永远是默认笑脸——这条日志用于发现这种情况。
+    if not matched:
+        conn.logger.bind(tag=TAG).warning(
+            f"[EMOTION] 未命中白名单 emoji，使用默认值 "
+            f"| emoji={emoji} emotion={emotion} | 回复片段={text[:30]!r}"
+        )
+
     try:
-        await conn.websocket.send(
-            json.dumps(
-                {
-                    "type": "llm",
-                    "text": emoji,
-                    "emotion": emotion,
-                    "session_id": conn.session_id,
-                }
-            )
+        await conn.websocket.send(message)
+        conn.logger.bind(tag=TAG).info(
+            f"[EMOTION] 下发成功 "
+            f"| matched={matched} emoji={emoji} emotion={emotion} "
+            f"| bytes={len(message)} | 报文={message_readable}"
         )
     except Exception as e:
-        conn.logger.bind(tag=TAG).warning(f"发送情绪表情失败，错误:{e}")
+        conn.logger.bind(tag=TAG).error(
+            f"[EMOTION] 下发失败 "
+            f"| emoji={emoji} emotion={emotion} "
+            f"| 错误={type(e).__name__}: {e} | 报文={message_readable}"
+        )
     return
 
 
