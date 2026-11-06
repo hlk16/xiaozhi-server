@@ -407,7 +407,7 @@ ASR:
     # 详细语言列表参考 https://www.volcengine.com/docs/6561/1354869
     # language: zh-cn
     # 静音判定时长(ms)，默认200ms
-    end_window_size: 200
+    end_window_size: 800
     output_dir: tmp/
   DoubaoStreamASRV2:
     # 豆包语音识别模型2.0（基于火山引擎seed-asr）
@@ -427,7 +427,7 @@ ASR:
     # 详细语言列表参考 https://www.volcengine.com/docs/6561/1354869
     # language: zh-cn
     # 静音判定时长(ms)，默认200ms
-    end_window_size: 200
+    end_window_size: 800
     output_dir: tmp/
   TencentASR:
     # token申请地址：https://console.cloud.tencent.com/cam/capi
